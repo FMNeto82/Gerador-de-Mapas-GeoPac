@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from flask import Flask, flash, redirect, render_template, request, send_file, url_for
@@ -107,4 +108,5 @@ def download():
 
 
 if __name__ == "__main__":
-    app.run(host="127.0.0.1", port=5000, debug=True)
+    port = int(os.environ.get("PORT", "8081"))
+    app.run(host="0.0.0.0", port=port, debug=False)

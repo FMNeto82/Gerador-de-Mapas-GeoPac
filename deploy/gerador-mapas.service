@@ -1,0 +1,15 @@
+[Unit]
+Description=Gerador de Mapas GeoPac
+After=network.target
+
+[Service]
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/Gerador-de-Mapas-GeoPac
+Environment=PORT=8081
+ExecStart=/var/www/Gerador-de-Mapas-GeoPac/.venv/bin/gunicorn --workers 2 --bind 0.0.0.0:8081 wsgi:app
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
