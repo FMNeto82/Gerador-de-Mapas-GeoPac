@@ -19,7 +19,7 @@ pip install -r requirements.txt
 python app.py
 ```
 
-Acesse `http://127.0.0.1:8081`.
+Acesse `http://127.0.0.1:8082`.
 
 ## Publicacao em VPS
 
@@ -39,12 +39,12 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now gerador-mapas
 ```
 
-O aplicativo fica disponivel em `http://IP-DA-VPS:8081`.
+O aplicativo fica disponivel em `http://IP-DA-VPS:8082`.
 
 Se houver firewall ativo:
 
 ```bash
-sudo ufw allow 8081/tcp
+sudo ufw allow 8082/tcp
 ```
 
 Em producao, altere `app.secret_key` em `app.py` para um valor exclusivo do servidor.
