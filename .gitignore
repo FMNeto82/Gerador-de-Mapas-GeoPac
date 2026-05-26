@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.venv/
+.env
+Mapa_Campo_LT_PGR_CAN.html
+Vetores/**/*.kml
+Vetores/**/*.kmz
+Vetores/**/*.csv
+!Vetores/.gitkeep
+!Vetores/Caminhamentos Terrestres/.gitkeep

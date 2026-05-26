@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gerador de Mapas LT Ponta Grossa - Canoinhas</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">LT 500kV Ponta Grossa - Canoinhas</p>
+        <h1>Gerador de Mapas de Pontos e Caminhamentos</h1>
+      </div>
+      <form action="{{ url_for('generate') }}" method="post">
+        <button class="primary" type="submit">Gerar mapa</button>
+      </form>
+    </header>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <section class="messages" aria-live="polite">
+          {% for category, message in messages %}
+            <div class="message {{ category }}">{{ message }}</div>
+          {% endfor %}
+        </section>
+      {% endif %}
+    {% endwith %}
+
+    <section class="status-grid">
+      <div class="status-card">
+        <span>Arquivo da LT</span>
+        <strong>{{ 'Carregado' if status.has_lt else 'Pendente' }}</strong>
+      </div>
+      <div class="status-card">
+        <span>Caminhamentos</span>
+        <strong>{{ status.track_count }}</strong>
+      </div>
+      <div class="status-card">
+        <span>Planilha</span>
+        <strong>Google Sheets</strong>
+      </div>
+      <div class="status-card">
+        <span>Mapa</span>
+        <strong>{{ 'Disponivel' if status.has_map else 'Nao gerado' }}</strong>
+      </div>
+    </section>
+
+    <section class="workarea">
+      <form class="panel" action="{{ url_for('upload') }}" method="post" enctype="multipart/form-data">
+        <h2>Dados vetoriais</h2>
+        <label>
+          <span>Eixo da LT (.kml)</span>
+          <input type="file" name="lt_file" accept=".kml">
+        </label>
+        <label>
+          <span>Caminhamentos terrestres (.kml ou .kmz)</span>
+          <input type="file" name="track_files" accept=".kml,.kmz" multiple>
+        </label>
+        <button type="submit">Enviar arquivos</button>
+        <p class="hint">
+          Os pontos de controle sao baixados automaticamente da planilha configurada
+          sempre que o mapa e gerado.
+        </p>
+      </form>
+
+      <section class="panel map-panel">
+        <div class="panel-head">
+          <h2>Mapa gerado</h2>
+          <div class="actions">
+            {% if status.has_map %}
+              <a href="{{ url_for('map_view') }}" target="_blank">Abrir</a>
+              <a href="{{ url_for('download') }}">Baixar HTML</a>
+            {% endif %}
+          </div>
+        </div>
+        {% if status.has_map %}
+          <iframe title="Mapa gerado" src="{{ url_for('map_view') }}"></iframe>
+        {% else %}
+          <div class="empty">Envie os arquivos vetoriais e clique em Gerar mapa.</div>
+        {% endif %}
+      </section>
+    </section>
+  </main>
+</body>
+</html>
