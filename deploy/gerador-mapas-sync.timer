@@ -1,0 +1,10 @@
+[Unit]
+Description=Executa a atualizacao diaria do mapa GeoPac as 19h
+
+[Timer]
+OnCalendar=*-*-* 19:00:00 America/Sao_Paulo
+Persistent=true
+Unit=gerador-mapas-sync.service
+
+[Install]
+WantedBy=timers.target

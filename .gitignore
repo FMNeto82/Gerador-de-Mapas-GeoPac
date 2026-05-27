@@ -5,6 +5,7 @@ __pycache__/
 Mapa_Campo_LT_PGR_CAN.html
 Vetores/**/*.kml
 Vetores/**/*.kmz
+Vetores/**/*.gpx
 Vetores/**/*.csv
 !Vetores/.gitkeep
 !Vetores/Caminhamentos Terrestres/.gitkeep

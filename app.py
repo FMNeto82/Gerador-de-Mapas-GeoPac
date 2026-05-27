@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parent
 VECTORS_DIR = ROOT / "Vetores"
 TRACKS_DIR = VECTORS_DIR / "Caminhamentos Terrestres"
 OUTPUT_HTML = ROOT / "Mapa_Campo_LT_PGR_CAN.html"
-ALLOWED_EXTENSIONS = {".kml", ".kmz"}
+ALLOWED_EXTENSIONS = {".kml", ".kmz", ".gpx"}
 
 app = Flask(__name__)
 app.secret_key = "troque-esta-chave-em-producao"
@@ -38,7 +38,7 @@ def save_uploaded_file(file_storage, target_dir: Path, forced_name: str | None =
 
 
 def current_status() -> dict:
-    track_count = len([p for p in TRACKS_DIR.glob("*") if p.suffix.lower() in ALLOWED_EXTENSIONS])
+    track_count = len([p for p in TRACKS_DIR.rglob("*") if p.is_file() and p.suffix.lower() in ALLOWED_EXTENSIONS])
     return {
         "has_lt": (VECTORS_DIR / "LT230kV PGR-CAN.kml").exists(),
         "track_count": track_count,

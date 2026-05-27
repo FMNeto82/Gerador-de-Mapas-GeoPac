@@ -1,0 +1,12 @@
+[Unit]
+Description=Sincroniza caminhamentos do Google Drive e atualiza o mapa GeoPac
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/Gerador-de-Mapas-GeoPac
+Environment=LOCUS_DRIVE_FOLDER_ID=1L035wiodAQnAHhvHYEHu0Q4lniZL6nhf
+ExecStart=/var/www/Gerador-de-Mapas-GeoPac/.venv/bin/python sync_drive_tracks.py

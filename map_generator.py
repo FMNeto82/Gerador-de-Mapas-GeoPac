@@ -18,6 +18,7 @@ OUTPUT = ROOT / "Mapa_Campo_LT_PGR_CAN.html"
 TRACKS_DIR = VECTORS / "Caminhamentos Terrestres"
 CONTROL_POINTS_CSV = VECTORS / "Pontos_Controle_Google.csv"
 CONTROL_POINTS_CSV_URL = "https://docs.google.com/spreadsheets/d/1O5p5TUAw_R8thT9GVXGzjGlRMIXDIdEknbXSaHUAjH4/export?format=csv&gid=0"
+TRACK_EXTENSIONS = {".kml", ".kmz", ".gpx"}
 
 
 def local_name(tag: str) -> str:
@@ -134,6 +135,90 @@ def parse_kml(path: Path, layer_name: str, layer_type: str) -> list[dict]:
     return features
 
 
+def parse_gpx(path: Path, layer_name: str, layer_type: str) -> list[dict]:
+    root = ET.fromstring(path.read_text(encoding="utf-8", errors="ignore").encode("utf-8"))
+    features: list[dict] = []
+
+    for track_index, track in enumerate((node for node in root.iter() if local_name(node.tag) == "trk"), start=1):
+        name = child_text(track, "name") or f"{path.stem} - track {track_index}"
+        description = child_text(track, "desc")
+        for segment_index, segment in enumerate((node for node in track if local_name(node.tag) == "trkseg"), start=1):
+            coords = []
+            times = []
+            for point in segment:
+                if local_name(point.tag) != "trkpt":
+                    continue
+                lat = point.attrib.get("lat")
+                lon = point.attrib.get("lon")
+                if lat is None or lon is None:
+                    continue
+                coord = [float(lon), float(lat)]
+                elevation = child_text(point, "ele")
+                if elevation:
+                    coord.append(float(elevation))
+                coords.append(coord)
+                point_time = child_text(point, "time")
+                if point_time:
+                    times.append(point_time)
+            if len(coords) < 2:
+                continue
+            feature_name = name if segment_index == 1 else f"{name} - trecho {segment_index}"
+            features.append(
+                {
+                    "type": "Feature",
+                    "geometry": {"type": "LineString", "coordinates": coords},
+                    "properties": {
+                        "name": feature_name,
+                        "description": description,
+                        "layer": layer_name,
+                        "kind": layer_type,
+                        "source": path.name,
+                        "activity": "",
+                        "start_time": times[0] if times else "",
+                        "end_time": times[-1] if times else "",
+                    },
+                }
+            )
+
+    for route_index, route in enumerate((node for node in root.iter() if local_name(node.tag) == "rte"), start=1):
+        name = child_text(route, "name") or f"{path.stem} - rota {route_index}"
+        description = child_text(route, "desc")
+        coords = []
+        for point in route:
+            if local_name(point.tag) != "rtept":
+                continue
+            lat = point.attrib.get("lat")
+            lon = point.attrib.get("lon")
+            if lat is not None and lon is not None:
+                coords.append([float(lon), float(lat)])
+        if len(coords) >= 2:
+            features.append(
+                {
+                    "type": "Feature",
+                    "geometry": {"type": "LineString", "coordinates": coords},
+                    "properties": {
+                        "name": name,
+                        "description": description,
+                        "layer": layer_name,
+                        "kind": layer_type,
+                        "source": path.name,
+                        "activity": "",
+                    },
+                }
+            )
+
+    return features
+
+
+def parse_vector_file(path: Path, layer_name: str, layer_type: str) -> list[dict]:
+    suffix = path.suffix.lower()
+    if suffix in {".kml", ".kmz"}:
+        return parse_kml(path, layer_name, layer_type)
+    if suffix == ".gpx":
+        return parse_gpx(path, layer_name, layer_type)
+    return []
+
+
 def parse_control_points_csv(path: Path) -> list[dict]:
     features: list[dict] = []
     with path.open(encoding="utf-8-sig", newline="") as csv_file:
@@ -182,10 +267,10 @@ def coordinates_from_row(row: dict[str, str]) -> tuple[float | None, float | Non
 
 def parse_track_folder(path: Path, layer_name: str) -> list[dict]:
     features: list[dict] = []
-    for track_file in sorted(path.glob("*")):
-        if track_file.suffix.lower() not in {".kml", ".kmz"}:
+    for track_file in sorted(path.rglob("*")):
+        if not track_file.is_file() or track_file.suffix.lower() not in TRACK_EXTENSIONS:
             continue
-        track_features = parse_kml(track_file, layer_name, "track")
+        track_features = parse_vector_file(track_file, layer_name, "track")
         features.extend(track_features)
     return filter_duplicate_tracks(features)
 
@@ -193,10 +278,10 @@ def parse_track_folder(path: Path, layer_name: str) -> list[dict]:
 def parse_track_folder_for_display(path: Path, layer_name: str) -> list[dict]:
     features: list[dict] = []
     raw_features: list[dict] = []
-    for track_file in sorted(path.glob("*")):
-        if track_file.suffix.lower() not in {".kml", ".kmz"}:
+    for track_file in sorted(path.rglob("*")):
+        if not track_file.is_file() or track_file.suffix.lower() not in TRACK_EXTENSIONS:
             continue
-        raw_features.extend(parse_kml(track_file, layer_name, "track"))
+        raw_features.extend(parse_vector_file(track_file, layer_name, "track"))
 
     line_features = [feature for feature in raw_features if feature["geometry"]["type"] == "LineString"]
     all_lats = [coord[1] for feature in line_features for coord in feature["geometry"]["coordinates"]]
