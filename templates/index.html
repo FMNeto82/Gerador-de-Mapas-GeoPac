@@ -66,6 +66,10 @@
           <span>Pasta padrao dos caminhamentos</span>
           <input type="text" name="tracks_folder" value="{{ status.tracks_folder }}">
         </label>
+        <label>
+          <span>Pasta do Google Drive dos caminhamentos</span>
+          <input type="text" name="tracks_drive_folder" value="{{ status.tracks_drive_folder }}">
+        </label>
         <div class="field-row">
           <label>
             <span>Legenda da LT</span>
@@ -86,6 +90,10 @@
             <input type="color" name="tracks_color" value="{{ status.tracks_color }}">
           </label>
         </div>
+        <label>
+          <span>Legenda dos pontos</span>
+          <input type="text" name="points_label" value="{{ status.points_label }}">
+        </label>
         <label>
           <span>Pasta padrao dos vetores extras</span>
           <input type="text" name="extra_vectors_folder" value="{{ status.extra_vectors_folder }}">
@@ -113,6 +121,11 @@
           <span>Caminhamentos terrestres (.kml, .kmz ou .gpx)</span>
           <input type="file" name="track_files" accept=".kml,.kmz,.gpx" multiple>
         </label>
+        <label>
+          <span>Pasta do Google Drive dos caminhamentos</span>
+          <input type="text" name="tracks_drive_folder" value="{{ status.tracks_drive_folder }}">
+        </label>
+        <button type="submit" formaction="{{ url_for('sync_tracks') }}" formmethod="post">Atualizar caminhamentos do Drive</button>
         <label>
           <span>Vetores extras e áreas (.kml, .kmz ou .gpx)</span>
           <input type="file" name="extra_files" accept=".kml,.kmz,.gpx" multiple>

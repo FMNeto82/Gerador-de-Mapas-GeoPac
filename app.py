@@ -3,8 +3,11 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
+import tempfile
 from pathlib import Path
 
+import gdown
 from flask import Flask, flash, redirect, render_template, request, send_file, url_for
 from werkzeug.utils import secure_filename
 
@@ -22,6 +25,7 @@ CONFIG_FILE = ROOT / "config.json"
 ALLOWED_EXTENSIONS = {".kml", ".kmz", ".gpx"}
 DEFAULT_SHEET_URL = "https://docs.google.com/spreadsheets/d/1O5p5TUAw_R8thT9GVXGzjGlRMIXDIdEknbXSaHUAjH4/edit?usp=drivesdk"
 DEFAULT_MAP_TITLE = "Mapa de Pontos e Caminhamentos LT Ponta Grossa - Canoinhas"
+DEFAULT_TRACKS_DRIVE_FOLDER = "https://drive.google.com/drive/folders/1L035wiodAQnAHhvHYEHu0Q4lniZL6nhf"
 
 app = Flask(__name__, static_url_path=f"{URL_PREFIX}/static")
 app.secret_key = "troque-esta-chave-em-producao"
@@ -36,6 +40,8 @@ def default_config() -> dict:
         "lt_color": "#d71920",
         "tracks_label": "Caminhamentos terrestres",
         "tracks_color": "#2f80ed",
+        "tracks_drive_folder": DEFAULT_TRACKS_DRIVE_FOLDER,
+        "points_label": "Pontos de controle",
         "extra_vectors_folder": str(EXTRA_VECTORS_DIR.relative_to(ROOT)),
         "extra_vectors_label": "Áreas e referências",
         "extra_vectors_color": "#7c3aed",
@@ -79,6 +85,49 @@ def google_sheet_csv_url(sheet_url: str) -> str:
     return f"https://docs.google.com/spreadsheets/d/{match.group(1)}/export?format=csv&gid={gid}"
 
 
+def drive_folder_id(folder_url: str) -> str:
+    value = (folder_url or "").strip()
+    match = re.search(r"/folders/([a-zA-Z0-9_-]+)", value)
+    if match:
+        return match.group(1)
+    id_match = re.search(r"[?&]id=([a-zA-Z0-9_-]+)", value)
+    if id_match:
+        return id_match.group(1)
+    return value
+
+
+def clear_vector_files(target_dir: Path) -> None:
+    target_dir.mkdir(parents=True, exist_ok=True)
+    for path in sorted(target_dir.rglob("*"), reverse=True):
+        if path.is_file() and path.suffix.lower() in ALLOWED_EXTENSIONS:
+            path.unlink()
+    for path in sorted((p for p in target_dir.rglob("*") if p.is_dir()), reverse=True):
+        try:
+            path.rmdir()
+        except OSError:
+            pass
+
+
+def sync_tracks_from_drive(folder_url: str, target_dir: Path) -> list[str]:
+    folder_id = drive_folder_id(folder_url)
+    if not folder_id:
+        raise ValueError("Informe o link ou ID da pasta do Google Drive dos caminhamentos.")
+    copied: list[str] = []
+    with tempfile.TemporaryDirectory(prefix="geopac-drive-") as temp_name:
+        temp_dir = Path(temp_name)
+        gdown.download_folder(id=folder_id, output=str(temp_dir), quiet=True, use_cookies=False)
+        clear_vector_files(target_dir)
+        for source in sorted(temp_dir.rglob("*")):
+            if not source.is_file() or source.suffix.lower() not in ALLOWED_EXTENSIONS:
+                continue
+            relative_path = source.relative_to(temp_dir)
+            target = target_dir / relative_path
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, target)
+            copied.append(relative_path.as_posix())
+    return copied
+
+
 def ensure_dirs() -> None:
     config = load_config()
     VECTORS_DIR.mkdir(exist_ok=True)
@@ -119,6 +168,8 @@ def current_status() -> dict:
         "lt_color": config["lt_color"],
         "tracks_label": config["tracks_label"],
         "tracks_color": config["tracks_color"],
+        "tracks_drive_folder": config["tracks_drive_folder"],
+        "points_label": config["points_label"],
         "extra_vectors_folder": config["extra_vectors_folder"],
         "extra_vectors_label": config["extra_vectors_label"],
         "extra_vectors_color": config["extra_vectors_color"],
@@ -151,6 +202,8 @@ def settings():
     config["lt_color"] = clean_hex_color(request.form.get("lt_color", ""), default_config()["lt_color"])
     config["tracks_label"] = request.form.get("tracks_label", "").strip() or default_config()["tracks_label"]
     config["tracks_color"] = clean_hex_color(request.form.get("tracks_color", ""), default_config()["tracks_color"])
+    config["tracks_drive_folder"] = request.form.get("tracks_drive_folder", "").strip() or default_config()["tracks_drive_folder"]
+    config["points_label"] = request.form.get("points_label", "").strip() or default_config()["points_label"]
     config["extra_vectors_folder"] = request.form.get("extra_vectors_folder", "").strip() or str(EXTRA_VECTORS_DIR.relative_to(ROOT))
     config["extra_vectors_label"] = request.form.get("extra_vectors_label", "").strip() or default_config()["extra_vectors_label"]
     config["extra_vectors_color"] = clean_hex_color(request.form.get("extra_vectors_color", ""), default_config()["extra_vectors_color"])
@@ -188,6 +241,23 @@ def upload():
     return redirect(url_for("index"))
 
 
+@app.post(f"{URL_PREFIX}/sync-tracks")
+def sync_tracks():
+    ensure_dirs()
+    config = load_config()
+    drive_folder = request.form.get("tracks_drive_folder", "").strip() or config["tracks_drive_folder"]
+    config["tracks_drive_folder"] = drive_folder
+    save_config(config)
+    tracks_path = resolve_app_path(config["tracks_folder"])
+    try:
+        copied = sync_tracks_from_drive(drive_folder, tracks_path)
+    except Exception as exc:
+        flash(f"Nao foi possivel sincronizar os caminhamentos do Drive: {exc}", "error")
+        return redirect(url_for("index"))
+    flash(f"{len(copied)} arquivo(s) de caminhamento sincronizado(s) do Drive.", "success")
+    return redirect(url_for("index"))
+
+
 @app.post(f"{URL_PREFIX}/generate")
 def generate():
     ensure_dirs()
@@ -201,6 +271,7 @@ def generate():
             lt_color=config["lt_color"],
             tracks_label=config["tracks_label"],
             tracks_color=config["tracks_color"],
+            points_label=config["points_label"],
             extra_vectors_dir=resolve_app_path(config["extra_vectors_folder"]),
             extra_vectors_label=config["extra_vectors_label"],
             extra_vectors_color=config["extra_vectors_color"],
@@ -247,6 +318,7 @@ def download_kmz():
             lt_color=config["lt_color"],
             tracks_label=config["tracks_label"],
             tracks_color=config["tracks_color"],
+            points_label=config["points_label"],
             extra_vectors_dir=resolve_app_path(config["extra_vectors_folder"]),
             extra_vectors_label=config["extra_vectors_label"],
             extra_vectors_color=config["extra_vectors_color"],

@@ -487,12 +487,15 @@ def collect_features(
     tracks_dir: Path | str = TRACKS_DIR,
     lt_label: str = "LT 500kV Ponta Grossa - Canoinhas",
     tracks_label: str = "Caminhamentos terrestres",
+    points_label: str = "Pontos de controle",
     extra_vectors_dir: Path | str | None = None,
     extra_vectors_label: str = "Áreas e referências",
 ) -> tuple[list[dict], list[dict], list[dict], list[dict], list[dict]]:
     update_control_points_csv(control_points_csv_url)
     lt = parse_kml(VECTORS / "LT230kV PGR-CAN.kml", lt_label, "lt")
-    points = parse_control_points_csv(CONTROL_POINTS_CSV) if CONTROL_POINTS_CSV.exists() else parse_kml(VECTORS / "Pontos Vistoriados.kml", "Pontos de controle", "point")
+    points = parse_control_points_csv(CONTROL_POINTS_CSV) if CONTROL_POINTS_CSV.exists() else parse_kml(VECTORS / "Pontos Vistoriados.kml", points_label, "point")
+    for point in points:
+        point["properties"]["layer"] = points_label
     tracks_path = Path(tracks_dir)
     tracks = parse_track_folder_for_display(tracks_path, tracks_label)
     tracks_for_distance = parse_track_folder(tracks_path, tracks_label)
@@ -508,6 +511,7 @@ def main(
     lt_color: str = "#d71920",
     tracks_label: str = "Caminhamentos terrestres",
     tracks_color: str = "#2f80ed",
+    points_label: str = "Pontos de controle",
     extra_vectors_dir: Path | str | None = None,
     extra_vectors_label: str = "Áreas e referências",
     extra_vectors_color: str = "#7c3aed",
@@ -517,6 +521,7 @@ def main(
         tracks_dir=tracks_dir,
         lt_label=lt_label,
         tracks_label=tracks_label,
+        points_label=points_label,
         extra_vectors_dir=extra_vectors_dir,
         extra_vectors_label=extra_vectors_label,
     )
@@ -815,7 +820,7 @@ def main(
       'Nomes e localidades sobre imagem': labels,
       {json.dumps(lt_label)}: ltLayer,
       {json.dumps(tracks_label)}: trackLayer,
-      'Pontos de controle': pointLayer
+      {json.dumps(points_label)}: pointLayer
     }};
     if (extraLayer.getLayers().length) overlays[{json.dumps(extra_vectors_label)}] = extraLayer;
 
@@ -837,7 +842,7 @@ def main(
           <div class="row"><span class="swatch" style="border-color:{html.escape(lt_color)}"></span><span>{html.escape(lt_label)}</span></div>
           <div class="row"><span class="swatch" style="border-color:{html.escape(tracks_color)}"></span><span>{html.escape(tracks_label)}</span></div>
           {extra_legend_row}
-          <div class="row"><span class="dot"></span><span>Pontos de controle</span></div>
+          <div class="row"><span class="dot"></span><span>{html.escape(points_label)}</span></div>
         `;
         return div;
       }}
@@ -916,6 +921,7 @@ def create_kmz(
     lt_color: str,
     tracks_label: str,
     tracks_color: str,
+    points_label: str,
     extra_vectors_dir: Path | str | None,
     extra_vectors_label: str,
     extra_vectors_color: str,
@@ -925,6 +931,7 @@ def create_kmz(
         tracks_dir=tracks_dir,
         lt_label=lt_label,
         tracks_label=tracks_label,
+        points_label=points_label,
         extra_vectors_dir=extra_vectors_dir,
         extra_vectors_label=extra_vectors_label,
     )
