@@ -241,32 +241,17 @@ def upload():
     return redirect(url_for("index"))
 
 
-@app.post(f"{URL_PREFIX}/sync-tracks")
-def sync_tracks():
-    ensure_dirs()
-    config = load_config()
-    drive_folder = request.form.get("tracks_drive_folder", "").strip() or config["tracks_drive_folder"]
-    config["tracks_drive_folder"] = drive_folder
-    save_config(config)
-    tracks_path = resolve_app_path(config["tracks_folder"])
-    try:
-        copied = sync_tracks_from_drive(drive_folder, tracks_path)
-    except Exception as exc:
-        flash(f"Nao foi possivel sincronizar os caminhamentos do Drive: {exc}", "error")
-        return redirect(url_for("index"))
-    flash(f"{len(copied)} arquivo(s) de caminhamento sincronizado(s) do Drive.", "success")
-    return redirect(url_for("index"))
-
-
 @app.post(f"{URL_PREFIX}/generate")
 def generate():
     ensure_dirs()
     config = load_config()
     try:
+        tracks_path = resolve_app_path(config["tracks_folder"])
+        copied_tracks = sync_tracks_from_drive(config["tracks_drive_folder"], tracks_path)
         result = map_generator.main(
             map_title=config["map_title"],
             control_points_csv_url=google_sheet_csv_url(config["sheet_url"]),
-            tracks_dir=resolve_app_path(config["tracks_folder"]),
+            tracks_dir=tracks_path,
             lt_label=config["lt_label"],
             lt_color=config["lt_color"],
             tracks_label=config["tracks_label"],
@@ -282,7 +267,8 @@ def generate():
 
     summary = result["summary"]
     flash(
-        f"Mapa gerado com {summary['points']} pontos de controle e "
+        f"Mapa gerado com {summary['points']} pontos de controle, "
+        f"{len(copied_tracks)} caminhamento(s) sincronizado(s) e "
         f"{summary['tracks_km']:.1f} km percorridos.",
         "success",
     )

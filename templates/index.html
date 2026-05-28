@@ -125,15 +125,14 @@
           <span>Pasta do Google Drive dos caminhamentos</span>
           <input type="text" name="tracks_drive_folder" value="{{ status.tracks_drive_folder }}">
         </label>
-        <button type="submit" formaction="{{ url_for('sync_tracks') }}" formmethod="post">Atualizar caminhamentos do Drive</button>
         <label>
           <span>Vetores extras e áreas (.kml, .kmz ou .gpx)</span>
           <input type="file" name="extra_files" accept=".kml,.kmz,.gpx" multiple>
         </label>
-        <button type="submit">Enviar arquivos</button>
+        <button type="submit">ATUALIZAR REFERÊNCIAS</button>
         <p class="hint">
-          Os arquivos enviados sao gravados na pasta padrao configurada para os caminhamentos.
-          Os pontos de controle sao baixados da planilha sempre que o mapa e gerado.
+          Ao gerar o mapa, os caminhamentos sao atualizados a partir da pasta do Google Drive
+          e lidos da pasta padrao configurada. Use este envio para atualizar LT e vetores extras.
         </p>
       </form>
 

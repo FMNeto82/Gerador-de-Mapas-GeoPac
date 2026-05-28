@@ -872,12 +872,18 @@ def main(
         attributionControl: false
       }});
       L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png', {{ maxZoom: 12 }}).addTo(overview);
-      L.geoJSON(dataset, {{
+      const overviewLtHalo = L.geoJSON(dataset, {{
+        filter: f => f.properties.kind === 'lt',
+        style: {{ color: '#ffffff', weight: 7, opacity: 0.9 }}
+      }}).addTo(overview);
+      const overviewLt = L.geoJSON(dataset, {{
         filter: f => f.properties.kind === 'lt',
         style: {{ color: {json.dumps(lt_color)}, weight: 4, opacity: 1 }}
       }}).addTo(overview);
       L.rectangle(bounds, {{ color: '#17212b', weight: 1, fill: false }}).addTo(overview);
-      overview.fitBounds(bounds, {{ padding: [8, 8] }});
+      overview.fitBounds(overviewLt.getBounds().isValid() ? overviewLt.getBounds() : bounds, {{ padding: [8, 8] }});
+      overviewLtHalo.bringToFront();
+      overviewLt.bringToFront();
     }}
   </script>
 </body>
