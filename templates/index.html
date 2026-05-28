@@ -38,6 +38,10 @@
         <strong>{{ status.track_count }}</strong>
       </div>
       <div class="status-card">
+        <span>Vetores extras</span>
+        <strong>{{ status.extra_count }}</strong>
+      </div>
+      <div class="status-card">
         <span>Planilha</span>
         <strong>{{ status.sheet_label }}</strong>
       </div>
@@ -62,6 +66,40 @@
           <span>Pasta padrao dos caminhamentos</span>
           <input type="text" name="tracks_folder" value="{{ status.tracks_folder }}">
         </label>
+        <div class="field-row">
+          <label>
+            <span>Legenda da LT</span>
+            <input type="text" name="lt_label" value="{{ status.lt_label }}">
+          </label>
+          <label>
+            <span>Cor da LT</span>
+            <input type="color" name="lt_color" value="{{ status.lt_color }}">
+          </label>
+        </div>
+        <div class="field-row">
+          <label>
+            <span>Legenda dos caminhamentos</span>
+            <input type="text" name="tracks_label" value="{{ status.tracks_label }}">
+          </label>
+          <label>
+            <span>Cor dos caminhamentos</span>
+            <input type="color" name="tracks_color" value="{{ status.tracks_color }}">
+          </label>
+        </div>
+        <label>
+          <span>Pasta padrao dos vetores extras</span>
+          <input type="text" name="extra_vectors_folder" value="{{ status.extra_vectors_folder }}">
+        </label>
+        <div class="field-row">
+          <label>
+            <span>Legenda dos vetores extras</span>
+            <input type="text" name="extra_vectors_label" value="{{ status.extra_vectors_label }}">
+          </label>
+          <label>
+            <span>Cor dos vetores extras</span>
+            <input type="color" name="extra_vectors_color" value="{{ status.extra_vectors_color }}">
+          </label>
+        </div>
         <button type="submit">Salvar configuracoes</button>
       </form>
 
@@ -74,6 +112,10 @@
         <label>
           <span>Caminhamentos terrestres (.kml, .kmz ou .gpx)</span>
           <input type="file" name="track_files" accept=".kml,.kmz,.gpx" multiple>
+        </label>
+        <label>
+          <span>Vetores extras e áreas (.kml, .kmz ou .gpx)</span>
+          <input type="file" name="extra_files" accept=".kml,.kmz,.gpx" multiple>
         </label>
         <button type="submit">Enviar arquivos</button>
         <p class="hint">
@@ -89,6 +131,7 @@
             {% if status.has_map %}
               <a href="{{ url_for('map_view') }}" target="_blank">Abrir</a>
               <a href="{{ url_for('download') }}">Baixar HTML</a>
+              <a href="{{ url_for('download_kmz') }}">Baixar KMZ</a>
             {% endif %}
           </div>
         </div>

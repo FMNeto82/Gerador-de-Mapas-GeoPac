@@ -128,7 +128,7 @@ button.primary:hover {
 
 .status-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 10px;
   margin-bottom: 16px;
 }
@@ -173,9 +173,16 @@ button.primary:hover {
   font-size: 13px;
 }
 
+.field-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 76px;
+  gap: 10px;
+}
+
 input[type="file"],
 input[type="text"],
-input[type="url"] {
+input[type="url"],
+input[type="color"] {
   width: 100%;
   padding: 10px;
   border: 1px dashed #b9c4d1;
@@ -183,6 +190,11 @@ input[type="url"] {
   background: #f8fafc;
   color: var(--ink);
   font: inherit;
+}
+
+input[type="color"] {
+  height: 42px;
+  padding: 5px;
 }
 
 .panel button {

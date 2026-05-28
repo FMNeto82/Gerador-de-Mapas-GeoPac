@@ -20,7 +20,7 @@ pip install -r requirements.txt
 python app.py
 ```
 
-Acesse `http://127.0.0.1:8082`.
+Acesse `http://127.0.0.1/gerador_de_mapas`.
 
 Para sincronizar os caminhamentos do Google Drive e gerar o mapa:
 
@@ -57,7 +57,7 @@ sudo systemctl enable --now gerador-mapas
 sudo systemctl enable --now gerador-mapas-sync.timer
 ```
 
-O aplicativo fica disponivel em `http://IP-DA-VPS:8082`.
+O aplicativo fica disponivel em `http://IP-DA-VPS/gerador_de_mapas`.
 
 A atualizacao automatica roda todos os dias as 19h no fuso `America/Sao_Paulo`.
 
@@ -71,7 +71,7 @@ sudo journalctl -u gerador-mapas-sync.service -n 80 --no-pager
 Se houver firewall ativo:
 
 ```bash
-sudo ufw allow 8082/tcp
+sudo ufw allow 80/tcp
 ```
 
 Em producao, altere `app.secret_key` em `app.py` para um valor exclusivo do servidor.

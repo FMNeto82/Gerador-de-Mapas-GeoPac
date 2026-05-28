@@ -302,6 +302,17 @@ def parse_track_folder_for_display(path: Path, layer_name: str) -> list[dict]:
     return features
 
 
+def parse_reference_folder(path: Path, layer_name: str) -> list[dict]:
+    features: list[dict] = []
+    if not path.exists():
+        return features
+    for vector_file in sorted(path.rglob("*")):
+        if not vector_file.is_file() or vector_file.suffix.lower() not in TRACK_EXTENSIONS:
+            continue
+        features.extend(parse_vector_file(vector_file, layer_name, "extra"))
+    return features
+
+
 def feature_collection(features: list[dict]) -> dict:
     return {"type": "FeatureCollection", "features": features}
 
@@ -471,28 +482,60 @@ def total_line_length_km(features: list[dict]) -> float:
     return total
 
 
+def collect_features(
+    control_points_csv_url: str = CONTROL_POINTS_CSV_URL,
+    tracks_dir: Path | str = TRACKS_DIR,
+    lt_label: str = "LT 500kV Ponta Grossa - Canoinhas",
+    tracks_label: str = "Caminhamentos terrestres",
+    extra_vectors_dir: Path | str | None = None,
+    extra_vectors_label: str = "Áreas e referências",
+) -> tuple[list[dict], list[dict], list[dict], list[dict], list[dict]]:
+    update_control_points_csv(control_points_csv_url)
+    lt = parse_kml(VECTORS / "LT230kV PGR-CAN.kml", lt_label, "lt")
+    points = parse_control_points_csv(CONTROL_POINTS_CSV) if CONTROL_POINTS_CSV.exists() else parse_kml(VECTORS / "Pontos Vistoriados.kml", "Pontos de controle", "point")
+    tracks_path = Path(tracks_dir)
+    tracks = parse_track_folder_for_display(tracks_path, tracks_label)
+    tracks_for_distance = parse_track_folder(tracks_path, tracks_label)
+    extras = parse_reference_folder(Path(extra_vectors_dir), extra_vectors_label) if extra_vectors_dir else []
+    return lt, points, tracks, tracks_for_distance, extras
+
+
 def main(
     map_title: str = "Mapa de Pontos e Caminhamentos LT Ponta Grossa - Canoinhas",
     control_points_csv_url: str = CONTROL_POINTS_CSV_URL,
     tracks_dir: Path | str = TRACKS_DIR,
+    lt_label: str = "LT 500kV Ponta Grossa - Canoinhas",
+    lt_color: str = "#d71920",
+    tracks_label: str = "Caminhamentos terrestres",
+    tracks_color: str = "#2f80ed",
+    extra_vectors_dir: Path | str | None = None,
+    extra_vectors_label: str = "Áreas e referências",
+    extra_vectors_color: str = "#7c3aed",
 ) -> dict:
-    tracks_path = Path(tracks_dir)
-    update_control_points_csv(control_points_csv_url)
-    lt_name = "LT 500kV Ponta Grossa - Canoinhas"
-    lt = parse_kml(VECTORS / "LT230kV PGR-CAN.kml", lt_name, "lt")
-    points = parse_control_points_csv(CONTROL_POINTS_CSV) if CONTROL_POINTS_CSV.exists() else parse_kml(VECTORS / "Pontos Vistoriados.kml", "Pontos de controle", "point")
-    tracks = parse_track_folder_for_display(tracks_path, "Caminhamentos terrestres")
-    tracks_for_distance = parse_track_folder(tracks_path, "Caminhamentos terrestres")
-    all_features = lt + points + tracks
+    lt, points, tracks, tracks_for_distance, extras = collect_features(
+        control_points_csv_url=control_points_csv_url,
+        tracks_dir=tracks_dir,
+        lt_label=lt_label,
+        tracks_label=tracks_label,
+        extra_vectors_dir=extra_vectors_dir,
+        extra_vectors_label=extra_vectors_label,
+    )
+    all_features = lt + points + tracks + extras
     data = feature_collection(all_features)
     map_bounds = bounds_for(all_features)
     point_bounds = bounds_for(points)
     generated_date = datetime.now().strftime("%d/%m/%Y")
+    extra_legend_row = (
+        f'<div class="row"><span class="swatch area" style="border-color:{html.escape(extra_vectors_color)}; background:{html.escape(extra_vectors_color)}22"></span><span>{html.escape(extra_vectors_label)}</span></div>'
+        if extras
+        else ""
+    )
 
     summary = {
         "lt": len(lt),
         "points": len(points),
         "tracks": len(tracks),
+        "extras": len(extras),
         "tracks_km": total_line_length_km(tracks_for_distance),
         "features": len(all_features),
     }
@@ -512,8 +555,9 @@ def main(
       --muted: #52606d;
       --panel: #ffffff;
       --line: #d6dde5;
-      --lt: #d71920;
-      --track: #2f80ed;
+      --lt: {html.escape(lt_color)};
+      --track: {html.escape(tracks_color)};
+      --extra: {html.escape(extra_vectors_color)};
       --point: #ffd23f;
     }}
     html, body {{
@@ -597,6 +641,10 @@ def main(
       border-top: 4px solid;
       border-radius: 4px;
       flex: 0 0 auto;
+    }}
+    .swatch.area {{
+      height: 10px;
+      border-top-width: 3px;
     }}
     .dot {{
       width: 11px;
@@ -722,8 +770,9 @@ def main(
 
     function styleFeature(feature) {{
       const kind = feature.properties.kind;
-      if (kind === 'lt') return {{ color: '#d71920', weight: 4, opacity: 0.95 }};
-      if (kind === 'track') return {{ color: '#2f80ed', weight: 2, opacity: 0.8 }};
+      if (kind === 'lt') return {{ color: {json.dumps(lt_color)}, weight: 4, opacity: 0.95 }};
+      if (kind === 'track') return {{ color: {json.dumps(tracks_color)}, weight: 2, opacity: 0.8 }};
+      if (kind === 'extra') return {{ color: {json.dumps(extra_vectors_color)}, weight: 2, opacity: 0.85, fillColor: {json.dumps(extra_vectors_color)}, fillOpacity: 0.18 }};
       return {{ color: '#333333', weight: 1 }};
     }}
 
@@ -748,6 +797,12 @@ def main(
       style: styleFeature,
       onEachFeature: (f, l) => l.bindPopup(popupContent(f))
     }}).addTo(map);
+    const extraLayer = L.geoJSON(dataset, {{
+      filter: f => f.properties.kind === 'extra',
+      style: styleFeature,
+      onEachFeature: (f, l) => l.bindPopup(popupContent(f))
+    }});
+    if (extraLayer.getLayers().length) extraLayer.addTo(map);
     const pointLayer = L.geoJSON(dataset, {{
       filter: f => f.properties.kind === 'point',
       pointToLayer: pointMarker,
@@ -756,17 +811,20 @@ def main(
 
     map.fitBounds(pointBounds, {{ padding: [18, 18] }});
 
+    const overlays = {{
+      'Nomes e localidades sobre imagem': labels,
+      {json.dumps(lt_label)}: ltLayer,
+      {json.dumps(tracks_label)}: trackLayer,
+      'Pontos de controle': pointLayer
+    }};
+    if (extraLayer.getLayers().length) overlays[{json.dumps(extra_vectors_label)}] = extraLayer;
+
     L.control.layers(
       {{
         'Imagem de satélite': imagery,
         'Localidades / ruas': localities
       }},
-      {{
-        'Nomes e localidades sobre imagem': labels,
-        'LT 500kV Ponta Grossa - Canoinhas': ltLayer,
-        'Caminhamentos terrestres': trackLayer,
-        'Pontos de controle': pointLayer
-      }},
+      overlays,
       {{ collapsed: true }}
     ).addTo(map);
 
@@ -776,8 +834,9 @@ def main(
         const div = L.DomUtil.create('div', 'legend');
         div.innerHTML = `
           <div class="legend-title">Legenda</div>
-          <div class="row"><span class="swatch" style="border-color:#d71920"></span><span>LT 500kV Ponta Grossa - Canoinhas</span></div>
-          <div class="row"><span class="swatch" style="border-color:#2f80ed"></span><span>Caminhamentos terrestres</span></div>
+          <div class="row"><span class="swatch" style="border-color:{html.escape(lt_color)}"></span><span>{html.escape(lt_label)}</span></div>
+          <div class="row"><span class="swatch" style="border-color:{html.escape(tracks_color)}"></span><span>{html.escape(tracks_label)}</span></div>
+          {extra_legend_row}
           <div class="row"><span class="dot"></span><span>Pontos de controle</span></div>
         `;
         return div;
@@ -810,7 +869,7 @@ def main(
       L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png', {{ maxZoom: 12 }}).addTo(overview);
       L.geoJSON(dataset, {{
         filter: f => f.properties.kind === 'lt',
-        style: {{ color: '#d71920', weight: 2, opacity: 0.95 }}
+        style: {{ color: {json.dumps(lt_color)}, weight: 4, opacity: 1 }}
       }}).addTo(overview);
       L.rectangle(bounds, {{ color: '#17212b', weight: 1, fill: false }}).addTo(overview);
       overview.fitBounds(bounds, {{ padding: [8, 8] }});
@@ -823,6 +882,99 @@ def main(
     result = {"output": str(OUTPUT), "summary": summary, "bounds": map_bounds}
     print(json.dumps(result, ensure_ascii=False, indent=2))
     return result
+
+
+def kml_coords(coords: list[list[float]]) -> str:
+    return " ".join(",".join(str(value) for value in coord[:3]) for coord in coords)
+
+
+def kml_geometry(geometry: dict) -> str:
+    geom_type = geometry["type"]
+    coords = geometry["coordinates"]
+    if geom_type == "Point":
+        return f"<Point><coordinates>{kml_coords([coords])}</coordinates></Point>"
+    if geom_type == "LineString":
+        return f"<LineString><tessellate>1</tessellate><coordinates>{kml_coords(coords)}</coordinates></LineString>"
+    if geom_type == "Polygon":
+        ring = coords[0]
+        if ring and ring[0][:2] != ring[-1][:2]:
+            ring = ring + [ring[0]]
+        return (
+            "<Polygon><outerBoundaryIs><LinearRing><coordinates>"
+            f"{kml_coords(ring)}"
+            "</coordinates></LinearRing></outerBoundaryIs></Polygon>"
+        )
+    return ""
+
+
+def create_kmz(
+    map_title: str,
+    control_points_csv_url: str,
+    tracks_dir: Path | str,
+    output_path: Path,
+    lt_label: str,
+    lt_color: str,
+    tracks_label: str,
+    tracks_color: str,
+    extra_vectors_dir: Path | str | None,
+    extra_vectors_label: str,
+    extra_vectors_color: str,
+) -> Path:
+    lt, points, tracks, _tracks_for_distance, extras = collect_features(
+        control_points_csv_url=control_points_csv_url,
+        tracks_dir=tracks_dir,
+        lt_label=lt_label,
+        tracks_label=tracks_label,
+        extra_vectors_dir=extra_vectors_dir,
+        extra_vectors_label=extra_vectors_label,
+    )
+    features = lt + points + tracks + extras
+    style_by_kind = {
+        "lt": ("ltStyle", lt_color),
+        "track": ("trackStyle", tracks_color),
+        "extra": ("extraStyle", extra_vectors_color),
+        "point": ("pointStyle", "ffd23f"),
+    }
+    styles = f"""
+      <Style id="ltStyle"><LineStyle><color>{kml_color(lt_color)}</color><width>4</width></LineStyle></Style>
+      <Style id="trackStyle"><LineStyle><color>{kml_color(tracks_color)}</color><width>2</width></LineStyle></Style>
+      <Style id="extraStyle"><LineStyle><color>{kml_color(extra_vectors_color)}</color><width>2</width></LineStyle><PolyStyle><color>33{kml_color(extra_vectors_color)[2:]}</color></PolyStyle></Style>
+      <Style id="pointStyle"><IconStyle><scale>0.8</scale><Icon><href>http://maps.google.com/mapfiles/kml/shapes/placemark_circle.png</href></Icon></IconStyle></Style>
+    """
+    placemarks = []
+    for feature in features:
+        properties = feature.get("properties", {})
+        style_id = style_by_kind.get(properties.get("kind"), ("extraStyle", extra_vectors_color))[0]
+        placemarks.append(
+            f"""
+      <Placemark>
+        <name>{html.escape(str(properties.get("name") or properties.get("layer") or ""))}</name>
+        <description>{html.escape(str(properties.get("source") or properties.get("layer") or ""))}</description>
+        <styleUrl>#{style_id}</styleUrl>
+        {kml_geometry(feature["geometry"])}
+      </Placemark>"""
+        )
+    kml_doc = f"""<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>{html.escape(map_title)}</name>
+    {styles}
+    {''.join(placemarks)}
+  </Document>
+</kml>
+"""
+    output_path.write_bytes(b"")
+    with zipfile.ZipFile(output_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("doc.kml", kml_doc.encode("utf-8"))
+    return output_path
+
+
+def kml_color(hex_color: str) -> str:
+    clean = hex_color.strip().lstrip("#")
+    if len(clean) != 6:
+        clean = "333333"
+    rr, gg, bb = clean[0:2], clean[2:4], clean[4:6]
+    return f"ff{bb}{gg}{rr}"
 
 
 if __name__ == "__main__":
