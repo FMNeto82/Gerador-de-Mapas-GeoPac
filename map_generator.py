@@ -368,53 +368,128 @@ def segment_key(start: list[float], end: list[float], ref_lat: float, grid_m: fl
     return round(mid_x / grid_m), round(mid_y / grid_m), angle_bin
 
 
-def filter_duplicate_tracks(features: list[dict], grid_m: float = 35.0, overlap_threshold: float = 0.82) -> list[dict]:
+def filter_duplicate_tracks(features: list[dict], buffer_m: float = 5.0, step_m: float = 5.0) -> list[dict]:
     line_features = [feature for feature in features if feature["geometry"]["type"] == "LineString"]
     all_lats = [coord[1] for feature in line_features for coord in feature["geometry"]["coordinates"]]
     ref_lat = sum(all_lats) / len(all_lats) if all_lats else -25.6
-    candidates = []
+    spatial_index_by_date: dict[str, dict[tuple[int, int], list[tuple[tuple[float, float], tuple[float, float]]]]] = {}
+    filtered: list[dict] = []
 
     for index, feature in enumerate(line_features):
-        coords = feature["geometry"]["coordinates"]
-        keys = track_keys(coords, ref_lat, grid_m)
-        candidates.append(
-            {
-                "index": index,
-                "feature": feature,
-                "keys": keys,
-                "date": track_date(feature),
-                "length": line_length_km(coords),
-            }
-        )
-
-    kept: list[dict] = []
-    for candidate in sorted(candidates, key=lambda item: (item["date"], -item["length"], item["index"])):
-        keys = candidate["keys"]
-        if not keys:
-            continue
-        duplicate = False
-        for existing in kept:
-            if existing["date"] != candidate["date"]:
+        date = track_date(feature)
+        spatial_index = spatial_index_by_date.setdefault(date, {})
+        kept_parts = non_overlapping_track_parts(feature["geometry"]["coordinates"], ref_lat, spatial_index, buffer_m, step_m)
+        for part_index, part in enumerate(kept_parts, start=1):
+            if len(part) < 2:
                 continue
-            overlap = len(keys & existing["keys"]) / len(keys)
-            if overlap >= overlap_threshold:
-                duplicate = True
-                break
-        if not duplicate:
-            kept.append(candidate)
+            properties = dict(feature["properties"])
+            properties["filtered"] = "trechos dentro do buffer de 5 m de caminhamentos do mesmo dia removidos do cálculo"
+            if len(kept_parts) > 1:
+                properties["name"] = f"{properties.get('name', 'Caminhamento')} - trecho calculado {part_index}"
+            filtered.append(
+                {
+                    "type": "Feature",
+                    "geometry": {"type": "LineString", "coordinates": simplify_line(part, ref_lat, tolerance_m=2.0)},
+                    "properties": properties,
+                    "_source_index": index,
+                }
+            )
 
-    return [complete_track_feature(item["feature"], ref_lat) for item in sorted(kept, key=lambda item: item["index"])]
+    for feature in filtered:
+        feature.pop("_source_index", None)
+    return filtered
 
 
-def track_keys(coords: list[list[float]], ref_lat: float, grid_m: float) -> set[tuple[int, int, int]]:
-    keys: set[tuple[int, int, int]] = set()
+def non_overlapping_track_parts(
+    coords: list[list[float]],
+    ref_lat: float,
+    spatial_index: dict[tuple[int, int], list[tuple[tuple[float, float], tuple[float, float]]]],
+    buffer_m: float,
+    step_m: float,
+) -> list[list[list[float]]]:
+    parts: list[list[list[float]]] = []
+    current: list[list[float]] = []
     for start, end in zip(coords, coords[1:]):
-        if line_length_km([start, end]) >= 0.005:
-            keys.add(segment_key(start, end, ref_lat, grid_m))
-    return keys
+        samples = densify_segment(start, end, ref_lat, step_m)
+        for seg_start, seg_end in zip(samples, samples[1:]):
+            mid = interpolate_coord(seg_start, seg_end, 0.5)
+            mid_xy = lonlat_to_meters(mid, ref_lat)
+            duplicate = point_near_index(mid_xy, spatial_index, buffer_m)
+            if duplicate:
+                if len(current) >= 2:
+                    parts.append(current)
+                current = []
+                continue
+            if not current:
+                current = [seg_start]
+            current.append(seg_end)
+            add_index_segment(seg_start, seg_end, ref_lat, spatial_index, buffer_m)
+    if len(current) >= 2:
+        parts.append(current)
+    return parts
+
+
+def densify_segment(start: list[float], end: list[float], ref_lat: float, step_m: float) -> list[list[float]]:
+    x1, y1 = lonlat_to_meters(start, ref_lat)
+    x2, y2 = lonlat_to_meters(end, ref_lat)
+    distance = math.hypot(x2 - x1, y2 - y1)
+    steps = max(1, math.ceil(distance / step_m))
+    return [interpolate_coord(start, end, i / steps) for i in range(steps + 1)]
+
+
+def interpolate_coord(start: list[float], end: list[float], fraction: float) -> list[float]:
+    values = [start[i] + (end[i] - start[i]) * fraction for i in range(min(len(start), len(end), 3))]
+    return values[:2] if len(values) < 3 else values
+
+
+def add_index_segment(
+    start: list[float],
+    end: list[float],
+    ref_lat: float,
+    spatial_index: dict[tuple[int, int], list[tuple[tuple[float, float], tuple[float, float]]]],
+    cell_m: float,
+) -> None:
+    start_xy = lonlat_to_meters(start, ref_lat)
+    end_xy = lonlat_to_meters(end, ref_lat)
+    mid_x = (start_xy[0] + end_xy[0]) / 2
+    mid_y = (start_xy[1] + end_xy[1]) / 2
+    cell = (math.floor(mid_x / cell_m), math.floor(mid_y / cell_m))
+    spatial_index.setdefault(cell, []).append((start_xy, end_xy))
+
+
+def point_near_index(
+    point_xy: tuple[float, float],
+    spatial_index: dict[tuple[int, int], list[tuple[tuple[float, float], tuple[float, float]]]],
+    buffer_m: float,
+) -> bool:
+    cell_x = math.floor(point_xy[0] / buffer_m)
+    cell_y = math.floor(point_xy[1] / buffer_m)
+    for dx in (-1, 0, 1):
+        for dy in (-1, 0, 1):
+            for start_xy, end_xy in spatial_index.get((cell_x + dx, cell_y + dy), []):
+                if point_segment_distance_m(point_xy, start_xy, end_xy) <= buffer_m:
+                    return True
+    return False
+
+
+def point_segment_distance_m(point: tuple[float, float], start: tuple[float, float], end: tuple[float, float]) -> float:
+    px, py = point
+    x1, y1 = start
+    x2, y2 = end
+    dx = x2 - x1
+    dy = y2 - y1
+    if dx == 0 and dy == 0:
+        return math.hypot(px - x1, py - y1)
+    t = max(0.0, min(1.0, ((px - x1) * dx + (py - y1) * dy) / (dx * dx + dy * dy)))
+    return math.hypot(px - (x1 + t * dx), py - (y1 + t * dy))
 
 
 def track_date(feature: dict) -> str:
+    start_time = feature["properties"].get("start_time", "")
+    if start_time:
+        match = re.search(r"(20\d{2})-(\d{2})-(\d{2})", start_time)
+        if match:
+            return "-".join(match.groups())
     source = feature["properties"].get("source", "")
     name = feature["properties"].get("name", "")
     match = re.search(r"(20\d{2})[-_](\d{2})[-_](\d{2})", source) or re.search(r"(20\d{2})-(\d{2})-(\d{2})", name)

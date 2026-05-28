@@ -224,9 +224,6 @@ def upload():
     try:
         if save_uploaded_file(request.files.get("lt_file"), VECTORS_DIR, "LT230kV PGR-CAN.kml"):
             saved += 1
-        for track_file in request.files.getlist("track_files"):
-            if save_uploaded_file(track_file, tracks_path):
-                saved += 1
         for extra_file in request.files.getlist("extra_files"):
             if save_uploaded_file(extra_file, extras_path):
                 saved += 1
