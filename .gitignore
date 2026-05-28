@@ -2,6 +2,7 @@ __pycache__/
 *.pyc
 .venv/
 .env
+config.json
 Mapa_Campo_LT_PGR_CAN.html
 Vetores/**/*.kml
 Vetores/**/*.kmz

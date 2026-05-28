@@ -37,10 +37,17 @@ body {
   margin-bottom: 18px;
 }
 
-.eyebrow {
-  margin: 0 0 6px;
-  color: var(--muted);
-  font-size: 13px;
+.brand {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+}
+
+.brand img {
+  width: 84px;
+  height: 84px;
+  object-fit: contain;
 }
 
 h1,
@@ -166,12 +173,16 @@ button.primary:hover {
   font-size: 13px;
 }
 
-input[type="file"] {
+input[type="file"],
+input[type="text"],
+input[type="url"] {
   width: 100%;
   padding: 10px;
   border: 1px dashed #b9c4d1;
   border-radius: 6px;
   background: #f8fafc;
+  color: var(--ink);
+  font: inherit;
 }
 
 .panel button {
@@ -187,6 +198,7 @@ input[type="file"] {
 }
 
 .map-panel {
+  grid-column: 1 / -1;
   min-height: 640px;
   padding: 0;
   overflow: hidden;
@@ -229,6 +241,15 @@ iframe {
   .panel-head {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .brand {
+    grid-template-columns: 64px minmax(0, 1fr);
+  }
+
+  .brand img {
+    width: 64px;
+    height: 64px;
   }
 
   .status-grid,

@@ -53,9 +53,9 @@ def read_kml_text(path: Path) -> str:
     return path.read_text(encoding="utf-8", errors="ignore")
 
 
-def update_control_points_csv() -> None:
+def update_control_points_csv(csv_url: str = CONTROL_POINTS_CSV_URL) -> None:
     try:
-        with urlopen(CONTROL_POINTS_CSV_URL, timeout=30) as response:
+        with urlopen(csv_url, timeout=30) as response:
             content = response.read()
         CONTROL_POINTS_CSV.write_bytes(content)
     except Exception as exc:
@@ -471,13 +471,18 @@ def total_line_length_km(features: list[dict]) -> float:
     return total
 
 
-def main() -> dict:
-    update_control_points_csv()
+def main(
+    map_title: str = "Mapa de Pontos e Caminhamentos LT Ponta Grossa - Canoinhas",
+    control_points_csv_url: str = CONTROL_POINTS_CSV_URL,
+    tracks_dir: Path | str = TRACKS_DIR,
+) -> dict:
+    tracks_path = Path(tracks_dir)
+    update_control_points_csv(control_points_csv_url)
     lt_name = "LT 500kV Ponta Grossa - Canoinhas"
     lt = parse_kml(VECTORS / "LT230kV PGR-CAN.kml", lt_name, "lt")
     points = parse_control_points_csv(CONTROL_POINTS_CSV) if CONTROL_POINTS_CSV.exists() else parse_kml(VECTORS / "Pontos Vistoriados.kml", "Pontos de controle", "point")
-    tracks = parse_track_folder_for_display(TRACKS_DIR, "Caminhamentos terrestres")
-    tracks_for_distance = parse_track_folder(TRACKS_DIR, "Caminhamentos terrestres")
+    tracks = parse_track_folder_for_display(tracks_path, "Caminhamentos terrestres")
+    tracks_for_distance = parse_track_folder(tracks_path, "Caminhamentos terrestres")
     all_features = lt + points + tracks
     data = feature_collection(all_features)
     map_bounds = bounds_for(all_features)
@@ -497,7 +502,7 @@ def main() -> dict:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Mapa de Pontos e Caminhamentos LT Ponta Grossa - Canoinhas</title>
+  <title>{html.escape(map_title)}</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <style>
@@ -659,7 +664,7 @@ def main() -> dict:
   <div class="page">
     <header>
       <div>
-        <h1>Mapa de Pontos e Caminhamentos LT Ponta Grossa - Canoinhas</h1>
+        <h1>{html.escape(map_title)}</h1>
         <div class="subtitle">Dados coletados até {html.escape(generated_date)}.</div>
       </div>
       <div class="stats">

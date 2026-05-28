@@ -3,15 +3,15 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Gerador de Mapas LT Ponta Grossa - Canoinhas</title>
+  <title>Gerador de Mapas de Pontos e Caminhamentos de Campo</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
 </head>
 <body>
   <main class="shell">
     <header class="topbar">
-      <div>
-        <p class="eyebrow">LT 500kV Ponta Grossa - Canoinhas</p>
-        <h1>Gerador de Mapas de Pontos e Caminhamentos</h1>
+      <div class="brand">
+        <img src="{{ url_for('static', filename='logo-geopac.png') }}" alt="GeoPac">
+        <h1>Gerador de Mapas de Pontos e Caminhamentos de Campo</h1>
       </div>
       <form action="{{ url_for('generate') }}" method="post">
         <button class="primary" type="submit">Gerar mapa</button>
@@ -39,7 +39,7 @@
       </div>
       <div class="status-card">
         <span>Planilha</span>
-        <strong>Google Sheets</strong>
+        <strong>{{ status.sheet_label }}</strong>
       </div>
       <div class="status-card">
         <span>Mapa</span>
@@ -48,6 +48,23 @@
     </section>
 
     <section class="workarea">
+      <form class="panel" action="{{ url_for('settings') }}" method="post">
+        <h2>Configuracoes do mapa</h2>
+        <label>
+          <span>Titulo do mapa</span>
+          <input type="text" name="map_title" value="{{ status.map_title }}">
+        </label>
+        <label>
+          <span>Link da planilha padrao</span>
+          <input type="url" name="sheet_url" value="{{ status.sheet_url }}">
+        </label>
+        <label>
+          <span>Pasta padrao dos caminhamentos</span>
+          <input type="text" name="tracks_folder" value="{{ status.tracks_folder }}">
+        </label>
+        <button type="submit">Salvar configuracoes</button>
+      </form>
+
       <form class="panel" action="{{ url_for('upload') }}" method="post" enctype="multipart/form-data">
         <h2>Dados vetoriais</h2>
         <label>
@@ -60,8 +77,8 @@
         </label>
         <button type="submit">Enviar arquivos</button>
         <p class="hint">
-          Os pontos de controle sao baixados automaticamente da planilha configurada
-          sempre que o mapa e gerado.
+          Os arquivos enviados sao gravados na pasta padrao configurada para os caminhamentos.
+          Os pontos de controle sao baixados da planilha sempre que o mapa e gerado.
         </p>
       </form>
 
