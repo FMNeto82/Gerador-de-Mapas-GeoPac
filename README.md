@@ -50,10 +50,13 @@ sudo python3 -m venv .venv
 sudo .venv/bin/pip install -r requirements.txt
 sudo chown -R www-data:www-data /var/www/Gerador-de-Mapas-GeoPac
 sudo cp deploy/gerador-mapas.service /etc/systemd/system/gerador-mapas.service
+sudo cp deploy/nginx-geopacconsultoria.conf /etc/nginx/sites-available/geopacconsultoria.conf
+sudo ln -sf /etc/nginx/sites-available/geopacconsultoria.conf /etc/nginx/sites-enabled/geopacconsultoria.conf
 sudo cp deploy/gerador-mapas-sync.service /etc/systemd/system/gerador-mapas-sync.service
 sudo cp deploy/gerador-mapas-sync.timer /etc/systemd/system/gerador-mapas-sync.timer
 sudo systemctl daemon-reload
 sudo systemctl enable --now gerador-mapas
+sudo systemctl enable --now nginx
 sudo systemctl enable --now gerador-mapas-sync.timer
 ```
 
