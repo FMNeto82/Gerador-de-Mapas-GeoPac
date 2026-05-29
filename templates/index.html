@@ -137,14 +137,14 @@
           <h2>Mapa gerado</h2>
           <div class="actions">
             {% if status.has_map %}
-              <a href="{{ url_for('map_view') }}" target="_blank">Abrir</a>
+              <a href="{{ url_for('public_map') }}" target="_blank">Abrir</a>
               <a href="{{ url_for('download') }}">Baixar HTML</a>
               <a href="{{ url_for('download_kmz') }}">Baixar KMZ</a>
             {% endif %}
           </div>
         </div>
         {% if status.has_map %}
-          <iframe title="Mapa gerado" src="{{ url_for('map_view') }}"></iframe>
+          <iframe title="Mapa gerado" src="{{ url_for('public_map') }}"></iframe>
         {% else %}
           <div class="empty">Envie os arquivos vetoriais e clique em Gerar mapa.</div>
         {% endif %}

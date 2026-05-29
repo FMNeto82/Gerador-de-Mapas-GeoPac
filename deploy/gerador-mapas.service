@@ -9,7 +9,7 @@ WorkingDirectory=/var/www/Gerador-de-Mapas-GeoPac
 Environment=PORT=80
 AmbientCapabilities=CAP_NET_BIND_SERVICE
 CapabilityBoundingSet=CAP_NET_BIND_SERVICE
-ExecStart=/var/www/Gerador-de-Mapas-GeoPac/.venv/bin/gunicorn --workers 2 --bind 0.0.0.0:80 wsgi:app
+ExecStart=/var/www/Gerador-de-Mapas-GeoPac/.venv/bin/gunicorn --workers 2 --timeout 600 --graceful-timeout 60 --bind 0.0.0.0:80 wsgi:app
 Restart=always
 RestartSec=5
 

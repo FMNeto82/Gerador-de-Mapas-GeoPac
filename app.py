@@ -231,6 +231,11 @@ def upload():
         flash(str(exc), "error")
         return redirect(url_for("index"))
 
+    drive_folder = request.form.get("tracks_drive_folder", "").strip()
+    if drive_folder:
+        config["tracks_drive_folder"] = drive_folder
+        save_config(config)
+
     if saved:
         flash(f"{saved} arquivo(s) enviado(s).", "success")
     else:
@@ -238,8 +243,11 @@ def upload():
     return redirect(url_for("index"))
 
 
-@app.post(f"{URL_PREFIX}/generate")
+@app.route(f"{URL_PREFIX}/generate", methods=["GET", "POST"])
 def generate():
+    if request.method == "GET":
+        return redirect(url_for("public_map") if OUTPUT_HTML.exists() else url_for("index"))
+
     ensure_dirs()
     config = load_config()
     try:
@@ -269,15 +277,20 @@ def generate():
         f"{summary['tracks_km']:.1f} km percorridos.",
         "success",
     )
-    return redirect(url_for("index"))
+    return redirect(url_for("public_map"))
 
 
-@app.get(f"{URL_PREFIX}/mapa")
-def map_view():
+@app.get("/mapa")
+def public_map():
     if not OUTPUT_HTML.exists():
         flash("Gere o mapa antes de visualizar.", "warning")
         return redirect(url_for("index"))
     return send_file(OUTPUT_HTML)
+
+
+@app.get(f"{URL_PREFIX}/mapa")
+def map_view():
+    return redirect(url_for("public_map"))
 
 
 @app.get(f"{URL_PREFIX}/download")

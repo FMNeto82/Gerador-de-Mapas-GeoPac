@@ -57,7 +57,8 @@ sudo systemctl enable --now gerador-mapas
 sudo systemctl enable --now gerador-mapas-sync.timer
 ```
 
-O aplicativo fica disponivel em `http://IP-DA-VPS/gerador_de_mapas`.
+O gerador fica disponivel em `http://IP-DA-VPS/gerador_de_mapas`.
+O mapa gerado fica disponivel em `http://IP-DA-VPS/mapa`.
 
 A atualizacao automatica roda todos os dias as 19h no fuso `America/Sao_Paulo`.
 
