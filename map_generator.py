@@ -990,19 +990,30 @@ def main(
         attributionControl: false
       }});
       L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png', {{ maxZoom: 12 }}).addTo(overview);
+      overview.createPane('referenceLtPane');
+      overview.getPane('referenceLtPane').style.zIndex = 720;
+      overview.getPane('referenceLtPane').style.pointerEvents = 'none';
+      const ltFilter = f => f.properties.kind === 'lt';
+      const referenceLineOptions = {{
+        pane: 'referenceLtPane',
+        interactive: false,
+        smoothFactor: 0,
+        lineCap: 'round',
+        lineJoin: 'round'
+      }};
       const overviewLtHalo = L.geoJSON(dataset, {{
-        filter: f => f.properties.kind === 'lt',
-        style: {{ color: '#ffffff', weight: 10, opacity: 1 }}
+        filter: ltFilter,
+        style: {{ ...referenceLineOptions, color: '#ffffff', weight: 14, opacity: 1 }}
       }}).addTo(overview);
       const overviewLtShadow = L.geoJSON(dataset, {{
-        filter: f => f.properties.kind === 'lt',
-        style: {{ color: '#111827', weight: 7, opacity: 0.9 }}
+        filter: ltFilter,
+        style: {{ ...referenceLineOptions, color: '#111827', weight: 9, opacity: 0.95 }}
       }}).addTo(overview);
       const overviewLt = L.geoJSON(dataset, {{
-        filter: f => f.properties.kind === 'lt',
-        style: {{ color: {json.dumps(lt_color)}, weight: 5, opacity: 1 }}
+        filter: ltFilter,
+        style: {{ ...referenceLineOptions, color: {json.dumps(lt_color)}, weight: 6, opacity: 1 }}
       }}).addTo(overview);
-      L.rectangle(bounds, {{ color: '#17212b', weight: 1, fill: false }}).addTo(overview);
+      L.rectangle(bounds, {{ color: '#17212b', weight: 1, fill: false, interactive: false }}).addTo(overview);
       overview.fitBounds(overviewLt.getBounds().isValid() ? overviewLt.getBounds() : bounds, {{ padding: [16, 16] }});
       overviewLtHalo.bringToFront();
       overviewLtShadow.bringToFront();
