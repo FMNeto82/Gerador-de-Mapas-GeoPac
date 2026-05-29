@@ -32,6 +32,13 @@ def child_text(node: ET.Element, name: str) -> str:
     return ""
 
 
+def first_descendant_text(node: ET.Element, names: set[str]) -> str:
+    for child in node.iter():
+        if local_name(child.tag) in names and child.text:
+            return child.text.strip()
+    return ""
+
+
 def parse_coords(text: str) -> list[list[float]]:
     coords: list[list[float]] = []
     for token in re.split(r"\s+", (text or "").strip()):
@@ -100,6 +107,8 @@ def parse_kml(path: Path, layer_name: str, layer_type: str) -> list[dict]:
     for placemark, folder_name in iter_placemarks(root):
         name = placemark_name(placemark, folder_name, path.stem)
         description = child_text(placemark, "description")
+        start_time = first_descendant_text(placemark, {"when", "begin"})
+        end_time = first_descendant_text(placemark, {"end"})
         for node in placemark.iter():
             tag = local_name(node.tag)
             if tag not in {"Point", "LineString", "Polygon"}:
@@ -129,6 +138,8 @@ def parse_kml(path: Path, layer_name: str, layer_type: str) -> list[dict]:
                         "kind": layer_type,
                         "source": path.name,
                         "activity": activity,
+                        "start_time": start_time,
+                        "end_time": end_time,
                     },
                 }
             )
@@ -271,6 +282,8 @@ def parse_track_folder(path: Path, layer_name: str) -> list[dict]:
         if not track_file.is_file() or track_file.suffix.lower() not in TRACK_EXTENSIONS:
             continue
         track_features = parse_vector_file(track_file, layer_name, "track")
+        for feature in track_features:
+            feature["properties"]["source_path"] = track_file.relative_to(path).as_posix()
         features.extend(track_features)
     return filter_duplicate_tracks(features)
 
@@ -281,7 +294,10 @@ def parse_track_folder_for_display(path: Path, layer_name: str) -> list[dict]:
     for track_file in sorted(path.rglob("*")):
         if not track_file.is_file() or track_file.suffix.lower() not in TRACK_EXTENSIONS:
             continue
-        raw_features.extend(parse_vector_file(track_file, layer_name, "track"))
+        track_features = parse_vector_file(track_file, layer_name, "track")
+        for feature in track_features:
+            feature["properties"]["source_path"] = track_file.relative_to(path).as_posix()
+        raw_features.extend(track_features)
 
     line_features = [feature for feature in raw_features if feature["geometry"]["type"] == "LineString"]
     all_lats = [coord[1] for feature in line_features for coord in feature["geometry"]["coordinates"]]
@@ -374,11 +390,17 @@ def filter_duplicate_tracks(features: list[dict], buffer_m: float = 5.0, step_m:
     ref_lat = sum(all_lats) / len(all_lats) if all_lats else -25.6
     spatial_index_by_date: dict[str, dict[tuple[int, int], list[tuple[tuple[float, float], tuple[float, float]]]]] = {}
     filtered: list[dict] = []
+    ordered_features = sorted(
+        enumerate(line_features),
+        key=lambda item: (track_date(item[1]), -line_length_km(item[1]["geometry"]["coordinates"]), item[0]),
+    )
 
-    for index, feature in enumerate(line_features):
+    for index, feature in ordered_features:
         date = track_date(feature)
         spatial_index = spatial_index_by_date.setdefault(date, {})
         kept_parts = non_overlapping_track_parts(feature["geometry"]["coordinates"], ref_lat, spatial_index, buffer_m, step_m)
+        for part in kept_parts:
+            add_line_to_index(part, ref_lat, spatial_index, buffer_m)
         for part_index, part in enumerate(kept_parts, start=1):
             if len(part) < 2:
                 continue
@@ -395,6 +417,7 @@ def filter_duplicate_tracks(features: list[dict], buffer_m: float = 5.0, step_m:
                 }
             )
 
+    filtered.sort(key=lambda feature: feature.get("_source_index", 0))
     for feature in filtered:
         feature.pop("_source_index", None)
     return filtered
@@ -423,10 +446,19 @@ def non_overlapping_track_parts(
             if not current:
                 current = [seg_start]
             current.append(seg_end)
-            add_index_segment(seg_start, seg_end, ref_lat, spatial_index, buffer_m)
     if len(current) >= 2:
         parts.append(current)
     return parts
+
+
+def add_line_to_index(
+    coords: list[list[float]],
+    ref_lat: float,
+    spatial_index: dict[tuple[int, int], list[tuple[tuple[float, float], tuple[float, float]]]],
+    cell_m: float,
+) -> None:
+    for start, end in zip(coords, coords[1:]):
+        add_index_segment(start, end, ref_lat, spatial_index, cell_m)
 
 
 def densify_segment(start: list[float], end: list[float], ref_lat: float, step_m: float) -> list[list[float]]:
@@ -485,15 +517,31 @@ def point_segment_distance_m(point: tuple[float, float], start: tuple[float, flo
 
 
 def track_date(feature: dict) -> str:
-    start_time = feature["properties"].get("start_time", "")
-    if start_time:
-        match = re.search(r"(20\d{2})-(\d{2})-(\d{2})", start_time)
-        if match:
-            return "-".join(match.groups())
-    source = feature["properties"].get("source", "")
-    name = feature["properties"].get("name", "")
-    match = re.search(r"(20\d{2})[-_](\d{2})[-_](\d{2})", source) or re.search(r"(20\d{2})-(\d{2})-(\d{2})", name)
-    return "-".join(match.groups()) if match else source[:10]
+    properties = feature["properties"]
+    for value in (
+        properties.get("start_time", ""),
+        properties.get("end_time", ""),
+        properties.get("source_path", ""),
+        properties.get("source", ""),
+        properties.get("name", ""),
+        properties.get("description", ""),
+    ):
+        date = extract_date(value)
+        if date:
+            return date
+    return properties.get("source_path") or properties.get("source", "") or properties.get("name", "")
+
+
+def extract_date(value: str) -> str:
+    text = value or ""
+    match = re.search(r"(20\d{2})[-_/](\d{2})[-_/](\d{2})", text)
+    if match:
+        return "-".join(match.groups())
+    match = re.search(r"(\d{2})/(\d{2})/(20\d{2})", text)
+    if match:
+        day, month, year = match.groups()
+        return f"{year}-{month}-{day}"
+    return ""
 
 
 def simplify_line(coords: list[list[float]], ref_lat: float, tolerance_m: float) -> list[list[float]]:
@@ -737,12 +785,7 @@ def main(
     }}
     .reference {{
       width: 260px;
-      padding: 8px;
-    }}
-    .reference-title {{
-      font-size: 12px;
-      font-weight: 700;
-      margin: 0 0 6px;
+      padding: 6px;
     }}
     #overview {{
       width: 260px;
@@ -928,7 +971,7 @@ def main(
       options: {{ position: 'bottomright' }},
       onAdd: function () {{
         const div = L.DomUtil.create('div', 'reference');
-        div.innerHTML = '<div class="reference-title">Mapa de referência</div><div id="overview"></div>';
+        div.innerHTML = '<div id="overview"></div>';
         L.DomEvent.disableClickPropagation(div);
         setTimeout(initOverview, 0);
         return div;
@@ -949,15 +992,20 @@ def main(
       L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png', {{ maxZoom: 12 }}).addTo(overview);
       const overviewLtHalo = L.geoJSON(dataset, {{
         filter: f => f.properties.kind === 'lt',
-        style: {{ color: '#ffffff', weight: 7, opacity: 0.9 }}
+        style: {{ color: '#ffffff', weight: 10, opacity: 1 }}
+      }}).addTo(overview);
+      const overviewLtShadow = L.geoJSON(dataset, {{
+        filter: f => f.properties.kind === 'lt',
+        style: {{ color: '#111827', weight: 7, opacity: 0.9 }}
       }}).addTo(overview);
       const overviewLt = L.geoJSON(dataset, {{
         filter: f => f.properties.kind === 'lt',
-        style: {{ color: {json.dumps(lt_color)}, weight: 4, opacity: 1 }}
+        style: {{ color: {json.dumps(lt_color)}, weight: 5, opacity: 1 }}
       }}).addTo(overview);
       L.rectangle(bounds, {{ color: '#17212b', weight: 1, fill: false }}).addTo(overview);
-      overview.fitBounds(overviewLt.getBounds().isValid() ? overviewLt.getBounds() : bounds, {{ padding: [8, 8] }});
+      overview.fitBounds(overviewLt.getBounds().isValid() ? overviewLt.getBounds() : bounds, {{ padding: [16, 16] }});
       overviewLtHalo.bringToFront();
+      overviewLtShadow.bringToFront();
       overviewLt.bringToFront();
     }}
   </script>
