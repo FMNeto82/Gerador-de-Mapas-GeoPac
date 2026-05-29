@@ -1003,21 +1003,33 @@ def main(
       }};
       const overviewLtHalo = L.geoJSON(dataset, {{
         filter: ltFilter,
-        style: {{ ...referenceLineOptions, color: '#ffffff', weight: 14, opacity: 1 }}
+        style: {{ ...referenceLineOptions, color: '#ffffff', weight: 8, opacity: 1 }}
       }}).addTo(overview);
       const overviewLtShadow = L.geoJSON(dataset, {{
         filter: ltFilter,
-        style: {{ ...referenceLineOptions, color: '#111827', weight: 9, opacity: 0.95 }}
+        style: {{ ...referenceLineOptions, color: '#111827', weight: 5, opacity: 0.9 }}
       }}).addTo(overview);
       const overviewLt = L.geoJSON(dataset, {{
         filter: ltFilter,
-        style: {{ ...referenceLineOptions, color: {json.dumps(lt_color)}, weight: 6, opacity: 1 }}
+        style: {{ ...referenceLineOptions, color: {json.dumps(lt_color)}, weight: 3, opacity: 1 }}
       }}).addTo(overview);
-      L.rectangle(bounds, {{ color: '#17212b', weight: 1, fill: false, interactive: false }}).addTo(overview);
+      const viewportRectangle = L.rectangle(map.getBounds(), {{
+        color: '#17212b',
+        weight: 2,
+        fill: false,
+        dashArray: '4 3',
+        interactive: false
+      }}).addTo(overview);
+      function syncOverviewRectangle() {{
+        viewportRectangle.setBounds(map.getBounds());
+      }}
+      map.on('moveend zoomend resize', syncOverviewRectangle);
       overview.fitBounds(overviewLt.getBounds().isValid() ? overviewLt.getBounds() : bounds, {{ padding: [16, 16] }});
+      syncOverviewRectangle();
       overviewLtHalo.bringToFront();
       overviewLtShadow.bringToFront();
       overviewLt.bringToFront();
+      viewportRectangle.bringToFront();
     }}
   </script>
 </body>
